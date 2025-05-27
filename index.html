@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Elegant AR Video Player</title>
+  <title>WebXR Video Player - Herlev1</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -123,69 +123,6 @@
       color: #00ff80;
     }
     
-    .file-input-container {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 1000;
-      opacity: 0;
-      transition: all 0.5s ease;
-    }
-    
-    .file-input-container.visible {
-      opacity: 1;
-    }
-    
-    .file-select-btn {
-      display: inline-block;
-      padding: 14px 28px;
-      background: linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.05));
-      backdrop-filter: blur(25px);
-      border: 1.5px solid rgba(255,255,255,0.3);
-      border-radius: 16px;
-      color: white;
-      font-size: 15px;
-      font-weight: 600;
-      letter-spacing: 0.5px;
-      cursor: pointer;
-      transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
-      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-      position: relative;
-      overflow: hidden;
-    }
-    
-    .file-select-btn::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: -100%;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-      transition: left 0.6s ease;
-    }
-    
-    .file-select-btn:hover {
-      background: linear-gradient(135deg, rgba(255,255,255,0.25), rgba(255,255,255,0.1));
-      border-color: rgba(255,255,255,0.5);
-      transform: translateY(-3px);
-      box-shadow: 0 12px 40px rgba(0,0,0,0.2);
-    }
-    
-    .file-select-btn:hover::before {
-      left: 100%;
-    }
-    
-    .file-select-btn:active {
-      transform: translateY(-1px);
-      box-shadow: 0 6px 20px rgba(0,0,0,0.15);
-    }
-    
-    #file-input {
-      display: none;
-    }
-    
     .status {
       position: fixed;
       bottom: 20px;
@@ -240,11 +177,22 @@
       position: absolute;
     }
     
+    .loading-indicator {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: white;
+      font-size: 16px;
+      opacity: 1;
+      transition: opacity 0.5s ease;
+    }
+    
+    .loading-indicator.hidden {
+      opacity: 0;
+    }
+    
     @media (max-width: 768px) {
-      .ar-button, .file-input-container {
-        bottom: 30px;
-      }
-      
       .play-button {
         width: 70px;
         height: 70px;
@@ -260,9 +208,11 @@
 </head>
 <body>
   <div id="video-container">
-    <video id="main-video" playsinline crossorigin="anonymous">
-      <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4">
+    <video id="main-video" playsinline crossorigin="anonymous" preload="metadata">
+      <source src="Herlev1.mp4" type="video/mp4">
     </video>
+    
+    <div class="loading-indicator" id="loading">Loading Herlev1.mp4...</div>
     
     <div class="video-overlay" id="video-overlay">
       <div class="play-button" id="play-button"></div>
@@ -272,11 +222,6 @@
   <button class="ar-button" id="ar-button">View in AR</button>
   <button class="exit-ar" id="exit-ar">×</button>
   
-  <div class="file-input-container" id="file-container">
-    <label for="file-input" class="file-select-btn">Choose Video</label>
-    <input type="file" id="file-input" accept="video/*">
-  </div>
-  
   <div class="status" id="status"></div>
 
   <script type="module">
@@ -284,9 +229,8 @@
 
     // Core variables
     let camera, scene, renderer, videoMesh, controllers = [], xrSession = null;
-    let videoElement, videoTexture, videoMaterial;
+    let videoTexture, videoMaterial;
     let isPlaying = false;
-    let currentVideoURL = null;
     let arSupported = false;
     
     // Controller state
@@ -301,9 +245,8 @@
     const videoOverlay = document.getElementById('video-overlay');
     const arButton = document.getElementById('ar-button');
     const exitButton = document.getElementById('exit-ar');
-    const fileInput = document.getElementById('file-input');
-    const fileContainer = document.getElementById('file-container');
     const statusEl = document.getElementById('status');
+    const loadingEl = document.getElementById('loading');
     
     function init() {
       // Check WebXR support
@@ -326,24 +269,22 @@
       // Setup video
       setupVideo();
       
-      // Load the default sample video
+      // Load the Herlev1 video
       mainVideo.load();
       
       // Event listeners
       playButton.addEventListener('click', togglePlay);
       arButton.addEventListener('click', enterAR);
       exitButton.addEventListener('click', exitAR);
-      fileInput.addEventListener('change', handleFileSelect);
       
       mainVideo.addEventListener('loadeddata', onVideoLoaded);
+      mainVideo.addEventListener('loadstart', onVideoLoadStart);
+      mainVideo.addEventListener('error', onVideoError);
       mainVideo.addEventListener('ended', onVideoEnded);
       
       window.addEventListener('resize', onWindowResize);
       
-      // Show file selector initially
-      setTimeout(() => {
-        fileContainer.classList.add('visible');
-      }, 1000);
+      showStatus('Loading Herlev1.mp4...');
     }
     
     async function checkARSupport() {
@@ -373,8 +314,8 @@
         side: THREE.FrontSide
       });
       
-      // Create 2D panel geometry
-      const aspectRatio = 16 / 9;
+      // Create 2D panel geometry - adjust size based on video aspect ratio
+      const aspectRatio = 16 / 9; // Default, will update when video loads
       const panelGeometry = new THREE.PlaneGeometry(2.4, 2.4 / aspectRatio);
       
       videoMesh = new THREE.Mesh(panelGeometry, videoMaterial);
@@ -385,30 +326,29 @@
       scene.add(new THREE.AmbientLight(0xffffff, 0.6));
     }
     
-    function handleFileSelect(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-      
-      if (currentVideoURL) {
-        URL.revokeObjectURL(currentVideoURL);
-      }
-      
-      currentVideoURL = URL.createObjectURL(file);
-      mainVideo.src = currentVideoURL;
-      mainVideo.load();
-      
-      fileContainer.classList.remove('visible');
-      showStatus(`Loaded: ${file.name}`);
+    function onVideoLoadStart() {
+      loadingEl.classList.remove('hidden');
+      showStatus('Loading video...');
     }
     
     function onVideoLoaded() {
       mainVideo.classList.add('loaded');
-      showStatus('Video ready - tap to play');
+      loadingEl.classList.add('hidden');
       
-      // Ensure sample video is available for AR mode
-      if (!currentVideoURL && mainVideo.src) {
-        showStatus('Sample video loaded - ready for AR');
+      // Update panel geometry based on actual video dimensions
+      if (mainVideo.videoWidth && mainVideo.videoHeight) {
+        const aspectRatio = mainVideo.videoWidth / mainVideo.videoHeight;
+        const newGeometry = new THREE.PlaneGeometry(2.4, 2.4 / aspectRatio);
+        videoMesh.geometry.dispose();
+        videoMesh.geometry = newGeometry;
       }
+      
+      showStatus('Herlev1.mp4 ready - tap to play');
+    }
+    
+    function onVideoError() {
+      loadingEl.classList.add('hidden');
+      showStatus('Error loading Herlev1.mp4 - check file exists in repo');
     }
     
     function onVideoEnded() {
@@ -460,7 +400,6 @@
         return;
       }
       
-      // Check if we have a video source (either uploaded or default sample)
       if (!mainVideo.src) {
         showStatus('No video available');
         return;
@@ -510,23 +449,20 @@
       
       // Ensure video continues playing with audio in AR
       if (!isPlaying && mainVideo.paused) {
-        // Auto-start video in AR if it wasn't playing
         mainVideo.muted = false;
         try {
           await mainVideo.play();
           isPlaying = true;
-          showStatus('AR mode active - video playing with audio');
+          showStatus('AR mode active - Herlev1 playing with audio');
         } catch (err) {
-          // Fallback to muted playback
           mainVideo.muted = true;
           await mainVideo.play();
           isPlaying = true;
           showStatus('AR mode active - tap controller to unmute');
         }
       } else {
-        // Video was already playing, ensure audio is enabled
         mainVideo.muted = false;
-        showStatus('AR mode active - point controller at panel and press trigger to play/pause');
+        showStatus('AR mode active - press controller trigger to play/pause');
       }
     }
     
@@ -579,7 +515,7 @@
         videoTexture.needsUpdate = true;
       }
       
-      // Keep panel facing user
+      // Keep panel facing user in AR
       if (videoMesh && xrSession) {
         const cameraDirection = new THREE.Vector3(0, 0, -1);
         cameraDirection.applyQuaternion(camera.quaternion);
@@ -615,9 +551,6 @@
     
     // Cleanup
     window.addEventListener('beforeunload', () => {
-      if (currentVideoURL) {
-        URL.revokeObjectURL(currentVideoURL);
-      }
       if (xrSession) {
         xrSession.end();
       }
