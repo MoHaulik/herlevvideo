@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Elegant AR Video Player</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #000;
+      overflow: hidden;
+      height: 100vh;
+      position: relative;
+    }
+    
+    #video-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    
+    #main-video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0;
+      transition: opacity 0.8s ease;
+    }
+    
+    #main-video.loaded {
+      opacity: 1;
+    }
+    
+    .video-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 1;
+      transition: opacity 0.5s ease;
+      pointer-events: none;
+    }
+    
+    .video-overlay.hidden {
+      opacity: 0;
+    }
+    
+    .play-button {
+      width: 80px;
+      height: 80px;
+      border: 3px solid rgba(255,255,255,0.9);
+      border-radius: 50%;
+      background: rgba(255,255,255,0.1);
+      backdrop-filter: blur(10px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      pointer-events: auto;
+    }
+    
+    .play-button:hover {
+      transform: scale(1.1);
+      background: rgba(255,255,255,0.2);
+    }
+    
+    .play-button::after {
+      content: '';
+      width: 0;
+      height: 0;
+      border-left: 20px solid rgba(255,255,255,0.9);
+      border-top: 12px solid transparent;
+      border-bottom: 12px solid transparent;
+      margin-left: 4px;
+    }
+    
+    .ar-button {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 12px 24px;
+      background: rgba(255,255,255,0.1);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 12px;
+      color: white;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      opacity: 0;
+      transform: translateY(-20px);
+      transition: all 0.4s ease;
+      z-index: 1000;
+      display: none;
+    }
+    
+    .ar-button.visible {
+      opacity: 1;
+      transform: translateY(0);
+      display: block;
+    }
+    
+    .ar-button:hover {
+      background: rgba(255,255,255,0.2);
+      transform: translateY(-2px);
+    }
+    
+    .ar-button.active {
+      background: rgba(0,255,128,0.2);
+      border-color: rgba(0,255,128,0.4);
+      color: #00ff80;
+    }
+    
+    .file-input-container {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      opacity: 0;
+      transition: all 0.5s ease;
+    }
+    
+    .file-input-container.visible {
+      opacity: 1;
+    }
+    
+    .file-select-btn {
+      display: inline-block;
+      padding: 14px 28px;
+      background: linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.05));
+      backdrop-filter: blur(25px);
+      border: 1.5px solid rgba(255,255,255,0.3);
+      border-radius: 16px;
+      color: white;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .file-select-btn::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+      transition: left 0.6s ease;
+    }
+    
+    .file-select-btn:hover {
+      background: linear-gradient(135deg, rgba(255,255,255,0.25), rgba(255,255,255,0.1));
+      border-color: rgba(255,255,255,0.5);
+      transform: translateY(-3px);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+    }
+    
+    .file-select-btn:hover::before {
+      left: 100%;
+    }
+    
+    .file-select-btn:active {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+    }
+    
+    #file-input {
+      display: none;
+    }
+    
+    .status {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.8);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      z-index: 1001;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    
+    .status.visible {
+      opacity: 1;
+    }
+    
+    .exit-ar {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      width: 44px;
+      height: 44px;
+      background: rgba(255,255,255,0.1);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 12px;
+      color: white;
+      font-size: 24px;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      transition: all 0.3s ease;
+    }
+    
+    .exit-ar:hover {
+      background: rgba(255,255,255,0.2);
+    }
+    
+    .ar-active .exit-ar {
+      display: flex;
+    }
+    
+    .ar-active #main-video {
+      opacity: 0.01;
+      width: 1px;
+      height: 1px;
+      position: absolute;
+    }
+    
+    @media (max-width: 768px) {
+      .ar-button, .file-input-container {
+        bottom: 30px;
+      }
+      
+      .play-button {
+        width: 70px;
+        height: 70px;
+      }
+      
+      .play-button::after {
+        border-left-width: 18px;
+        border-top-width: 10px;
+        border-bottom-width: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="video-container">
+    <video id="main-video" playsinline crossorigin="anonymous">
+      <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4">
+    </video>
+    
+    <div class="video-overlay" id="video-overlay">
+      <div class="play-button" id="play-button"></div>
+    </div>
+  </div>
+  
+  <button class="ar-button" id="ar-button">View in AR</button>
+  <button class="exit-ar" id="exit-ar">×</button>
+  
+  <div class="file-input-container" id="file-container">
+    <label for="file-input" class="file-select-btn">Choose Video</label>
+    <input type="file" id="file-input" accept="video/*">
+  </div>
+  
+  <div class="status" id="status"></div>
+
+  <script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.150.1/build/three.module.js';
+
+    // Core variables
+    let camera, scene, renderer, videoMesh, controllers = [], xrSession = null;
+    let videoElement, videoTexture, videoMaterial;
+    let isPlaying = false;
+    let currentVideoURL = null;
+    let arSupported = false;
+    
+    // Controller state
+    let controllerState = [
+      { isPressed: false, pressStartTime: 0 },
+      { isPressed: false, pressStartTime: 0 }
+    ];
+    
+    // DOM elements
+    const mainVideo = document.getElementById('main-video');
+    const playButton = document.getElementById('play-button');
+    const videoOverlay = document.getElementById('video-overlay');
+    const arButton = document.getElementById('ar-button');
+    const exitButton = document.getElementById('exit-ar');
+    const fileInput = document.getElementById('file-input');
+    const fileContainer = document.getElementById('file-container');
+    const statusEl = document.getElementById('status');
+    
+    function init() {
+      // Check WebXR support
+      checkARSupport();
+      
+      // Setup Three.js for AR mode
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+      
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.xr.enabled = true;
+      renderer.setClearColor(0x000000, 0);
+      renderer.domElement.style.position = 'absolute';
+      renderer.domElement.style.top = '0';
+      renderer.domElement.style.left = '0';
+      renderer.domElement.style.zIndex = '-1';
+      document.body.appendChild(renderer.domElement);
+      
+      // Setup video
+      setupVideo();
+      
+      // Load the default sample video
+      mainVideo.load();
+      
+      // Event listeners
+      playButton.addEventListener('click', togglePlay);
+      arButton.addEventListener('click', enterAR);
+      exitButton.addEventListener('click', exitAR);
+      fileInput.addEventListener('change', handleFileSelect);
+      
+      mainVideo.addEventListener('loadeddata', onVideoLoaded);
+      mainVideo.addEventListener('ended', onVideoEnded);
+      
+      window.addEventListener('resize', onWindowResize);
+      
+      // Show file selector initially
+      setTimeout(() => {
+        fileContainer.classList.add('visible');
+      }, 1000);
+    }
+    
+    async function checkARSupport() {
+      if (!navigator.xr) return;
+      
+      try {
+        arSupported = await navigator.xr.isSessionSupported('immersive-ar');
+        if (arSupported) {
+          setTimeout(() => {
+            arButton.classList.add('visible');
+          }, 1500);
+        }
+      } catch (e) {
+        console.log('AR check failed:', e);
+      }
+    }
+    
+    function setupVideo() {
+      // Create video texture for AR mode
+      videoTexture = new THREE.VideoTexture(mainVideo);
+      videoTexture.minFilter = THREE.LinearFilter;
+      videoTexture.magFilter = THREE.LinearFilter;
+      videoTexture.format = THREE.RGBAFormat;
+      
+      videoMaterial = new THREE.MeshBasicMaterial({
+        map: videoTexture,
+        side: THREE.FrontSide
+      });
+      
+      // Create 2D panel geometry
+      const aspectRatio = 16 / 9;
+      const panelGeometry = new THREE.PlaneGeometry(2.4, 2.4 / aspectRatio);
+      
+      videoMesh = new THREE.Mesh(panelGeometry, videoMaterial);
+      videoMesh.position.set(0, 0, -1.5);
+      scene.add(videoMesh);
+      
+      // Ambient light for visibility
+      scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    }
+    
+    function handleFileSelect(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      if (currentVideoURL) {
+        URL.revokeObjectURL(currentVideoURL);
+      }
+      
+      currentVideoURL = URL.createObjectURL(file);
+      mainVideo.src = currentVideoURL;
+      mainVideo.load();
+      
+      fileContainer.classList.remove('visible');
+      showStatus(`Loaded: ${file.name}`);
+    }
+    
+    function onVideoLoaded() {
+      mainVideo.classList.add('loaded');
+      showStatus('Video ready - tap to play');
+      
+      // Ensure sample video is available for AR mode
+      if (!currentVideoURL && mainVideo.src) {
+        showStatus('Sample video loaded - ready for AR');
+      }
+    }
+    
+    function onVideoEnded() {
+      isPlaying = false;
+      videoOverlay.classList.remove('hidden');
+      showStatus('Video ended');
+    }
+    
+    function togglePlay() {
+      if (isPlaying) {
+        mainVideo.pause();
+        isPlaying = false;
+        videoOverlay.classList.remove('hidden');
+        showStatus('Paused');
+      } else {
+        // Ensure audio is enabled
+        mainVideo.muted = false;
+        
+        mainVideo.play().then(() => {
+          isPlaying = true;
+          videoOverlay.classList.add('hidden');
+          const audioStatus = mainVideo.muted ? ' (muted)' : ' with audio';
+          showStatus('Playing' + audioStatus);
+        }).catch(err => {
+          // Try with muted first, then user can unmute
+          mainVideo.muted = true;
+          mainVideo.play().then(() => {
+            isPlaying = true;
+            videoOverlay.classList.add('hidden');
+            showStatus('Playing (tap to unmute)');
+            
+            // Try to unmute after a short delay
+            setTimeout(() => {
+              mainVideo.muted = false;
+              if (!mainVideo.muted) {
+                showStatus('Audio enabled');
+              }
+            }, 1000);
+          }).catch(err => {
+            showStatus('Playback failed: ' + err.message);
+          });
+        });
+      }
+    }
+    
+    async function enterAR() {
+      if (!arSupported) {
+        showStatus('AR not supported on this device');
+        return;
+      }
+      
+      // Check if we have a video source (either uploaded or default sample)
+      if (!mainVideo.src) {
+        showStatus('No video available');
+        return;
+      }
+      
+      try {
+        arButton.textContent = 'Starting AR...';
+        
+        const session = await navigator.xr.requestSession('immersive-ar', {
+          optionalFeatures: ['hand-tracking']
+        });
+        
+        await onSessionStarted(session);
+        
+      } catch (err) {
+        showStatus('Failed to start AR: ' + err.message);
+        arButton.textContent = 'View in AR';
+      }
+    }
+    
+    async function onSessionStarted(session) {
+      xrSession = session;
+      
+      // Hide regular UI
+      document.body.classList.add('ar-active');
+      arButton.classList.add('active');
+      arButton.textContent = 'AR Active';
+      
+      // Setup XR
+      renderer.xr.setReferenceSpaceType('local');
+      await renderer.xr.setSession(session);
+      
+      // Setup controllers
+      controllers = [0, 1].map(i => {
+        const controller = renderer.xr.getController(i);
+        controller.addEventListener('selectstart', () => handleControllerPress(i, true));
+        controller.addEventListener('selectend', () => handleControllerPress(i, false));
+        scene.add(controller);
+        return controller;
+      });
+      
+      // Start render loop
+      renderer.setAnimationLoop(render);
+      
+      // Session end handler
+      session.addEventListener('end', onSessionEnd);
+      
+      // Ensure video continues playing with audio in AR
+      if (!isPlaying && mainVideo.paused) {
+        // Auto-start video in AR if it wasn't playing
+        mainVideo.muted = false;
+        try {
+          await mainVideo.play();
+          isPlaying = true;
+          showStatus('AR mode active - video playing with audio');
+        } catch (err) {
+          // Fallback to muted playback
+          mainVideo.muted = true;
+          await mainVideo.play();
+          isPlaying = true;
+          showStatus('AR mode active - tap controller to unmute');
+        }
+      } else {
+        // Video was already playing, ensure audio is enabled
+        mainVideo.muted = false;
+        showStatus('AR mode active - point controller at panel and press trigger to play/pause');
+      }
+    }
+    
+    function handleControllerPress(controllerIndex, isPressed) {
+      const state = controllerState[controllerIndex];
+      
+      if (isPressed) {
+        state.isPressed = true;
+        state.pressStartTime = Date.now();
+      } else {
+        if (state.isPressed) {
+          const pressDuration = Date.now() - state.pressStartTime;
+          
+          if (pressDuration < 500) { // Short press
+            togglePlay();
+          }
+        }
+        
+        state.isPressed = false;
+        state.pressStartTime = 0;
+      }
+    }
+    
+    function exitAR() {
+      if (xrSession) {
+        xrSession.end();
+      }
+    }
+    
+    function onSessionEnd() {
+      // Restore normal UI
+      document.body.classList.remove('ar-active');
+      arButton.classList.remove('active');
+      arButton.textContent = 'View in AR';
+      
+      // Cleanup XR
+      renderer.setAnimationLoop(null);
+      xrSession = null;
+      
+      // Remove controllers
+      controllers.forEach(controller => scene.remove(controller));
+      controllers = [];
+      
+      showStatus('Exited AR mode');
+    }
+    
+    function render(timestamp, frame) {
+      // Update video texture
+      if (videoTexture) {
+        videoTexture.needsUpdate = true;
+      }
+      
+      // Keep panel facing user
+      if (videoMesh && xrSession) {
+        const cameraDirection = new THREE.Vector3(0, 0, -1);
+        cameraDirection.applyQuaternion(camera.quaternion);
+        cameraDirection.multiplyScalar(1.5);
+        
+        const targetPosition = new THREE.Vector3().copy(camera.position).add(cameraDirection);
+        videoMesh.position.lerp(targetPosition, 0.05);
+        videoMesh.lookAt(camera.position);
+      }
+      
+      renderer.render(scene, camera);
+    }
+    
+    function showStatus(message) {
+      statusEl.textContent = message;
+      statusEl.classList.add('visible');
+      
+      clearTimeout(showStatus.timeout);
+      showStatus.timeout = setTimeout(() => {
+        statusEl.classList.remove('visible');
+      }, 3000);
+    }
+    
+    function onWindowResize() {
+      if (camera) {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+      }
+      if (renderer) {
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+    }
+    
+    // Cleanup
+    window.addEventListener('beforeunload', () => {
+      if (currentVideoURL) {
+        URL.revokeObjectURL(currentVideoURL);
+      }
+      if (xrSession) {
+        xrSession.end();
+      }
+    });
+    
+    // Initialize
+    init();
+  </script>
+</body>
+</html>
